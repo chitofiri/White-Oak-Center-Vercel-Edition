@@ -1,4 +1,4 @@
-# White Oak Center Portal — Vercel deployment build
+# White Oak Center Portal
 
 ## Important
 This is a deployment-adapted development build, **not certified or ready for real children's, court or safeguarding records**. Before live use, complete a UK GDPR/DPA 2018 DPIA and lawful-basis review, safeguarding/access policy approval, independent security testing, MFA/session hardening, retention and deletion workflows, malware scanning, backups and restore tests.
