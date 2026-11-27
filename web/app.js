@@ -87,10 +87,46 @@ async function openClientCase(id){
     if(c.permissions.schedule) sessions=await api(`/api/client/cases/${id}/sessions`);
     target.innerHTML=`<div class="two-col client-sections">${c.permissions.documents?panel('Documents shared with you',docs.length?`<ul class="document-list">${docs.map(d=>`<li><div><strong>${esc(d.filename)}</strong><small>Shared by White Oak Center</small></div><a href="/api/client/documents/${d.id}/download" data-client-download="${d.id}">Download</a></li>`).join('')}</ul>`:renderEmpty('No documents have been shared with you yet.')):panel('Documents','Document access has not been enabled for this account.')}${c.permissions.schedule?panel('Contact arrangements',sessions.length?`<ul class="document-list">${sessions.map(s=>`<li><div><strong>${esc(s.date)} · ${esc(s.start_time)}–${esc(s.end_time)}</strong><small>${esc(s.venue)} · ${esc(s.status)}</small></div></li>`).join('')}</ul>`:renderEmpty('No contact arrangements are currently available.')):panel('Contact arrangements','Schedule access has not been enabled for this account.')}</div>
       <div class="two-col">${c.permissions.submit_documents?panel('Submit a PDF document',`<form class="stack" id="client-upload-${id}"><label>Choose a PDF<input type="file" name="file" accept="application/pdf,.pdf" required></label><small>Only PDF files are accepted. Maximum 15 MB.</small><button>Submit document securely</button></form>`):''}${c.permissions.submit_documents?panel('Submit referral information',`<form class="stack" id="referral-${id}"><label>Referral information<textarea name="form_data" rows="6" placeholder="Enter only the information requested by White Oak Center." required></textarea></label><small>Do not include information about another person unless specifically requested and you are authorized to provide it.</small><button>Submit information</button></form>`):panel('Submissions','Document and referral submission has not been enabled for this account.')}</div>`;
+    target.insertAdjacentHTML('beforeend', clientAIPanel(id));
+    const chatForm=$(`ai-chat-${id}`); if(chatForm) chatForm.addEventListener('submit',e=>runClientAI(e,id,'chat'));
+    const draftForm=$(`ai-draft-${id}`); if(draftForm) draftForm.addEventListener('submit',e=>runClientAI(e,id,'draft'));
+    const summaryForm=$(`ai-summary-${id}`); if(summaryForm) summaryForm.addEventListener('submit',e=>runClientAI(e,id,'summarize'));
+    const analyticsButton=$(`ai-analytics-${id}`); if(analyticsButton) analyticsButton.addEventListener('click',()=>loadClientAIAnalytics(id));
     target.querySelectorAll('a[data-client-download]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();downloadFile(a.href,a.textContent)}));
     const up=$(`client-upload-${id}`);if(up)up.addEventListener('submit',e=>uploadClientPdf(e,id));const ref=$(`referral-${id}`);if(ref)ref.addEventListener('submit',e=>submitReferral(e,id));
   }catch(err){notice(err.message,'error');}
 }
+function clientAIPanel(id){
+  return `<section class="panel ai-panel"><div class="panel-head"><h3>AI support tools</h3></div>
+    <p class="muted">Optional AI assistance for general questions, message drafts and summaries. Please do not enter names, case details, children's information or other sensitive personal data. AI output can be inaccurate and must be checked.</p>
+    <div class="two-col">
+      ${panel('Ask a general question',`<form id="ai-chat-${id}" class="stack"><label>Your question<textarea name="prompt" rows="3" maxlength="4000" required placeholder="Ask a general question about using the portal or preparing to contact the centre."></textarea></label><button>Ask assistant</button><pre id="ai-chat-result-${id}" class="ai-result" aria-live="polite"></pre></form>`)}
+      ${panel('Draft a message',`<form id="ai-draft-${id}" class="stack"><label>What would you like to communicate?<textarea name="prompt" rows="3" maxlength="4000" required placeholder="Describe the message in general terms without personal or case details."></textarea></label><button>Create draft</button><pre id="ai-draft-result-${id}" class="ai-result" aria-live="polite"></pre></form>`)}
+      ${panel('Summarize text',`<form id="ai-summary-${id}" class="stack"><label>Text to summarize<textarea name="text" rows="4" maxlength="12000" required placeholder="Paste non-sensitive text only."></textarea></label><button>Summarize text</button><pre id="ai-summary-result-${id}" class="ai-result" aria-live="polite"></pre></form>`)}
+      ${panel('My case overview',`<p class="muted">View a simple factual overview of information available to your account.</p><button type="button" id="ai-analytics-${id}">Load case overview</button><pre id="ai-analytics-result-${id}" class="ai-result" aria-live="polite"></pre>`)}
+    </div></section>`;
+}
+async function runClientAI(event,id,kind){
+  event.preventDefault();
+  const form=event.currentTarget;const button=form.querySelector('button');const result=$(`ai-${kind}-result-${id}`);
+  const values=new FormData(form);const body=kind==='summarize'?{text:values.get('text')}:{prompt:values.get('prompt')};
+  button.disabled=true;button.textContent='Working…';result.textContent='The local AI service is processing your request…';
+  try{const data=await api(`/api/client/ai/${kind}`,{method:'POST',body:JSON.stringify(body)});result.textContent=data.answer||'No response was returned.';}
+  catch(err){result.textContent=err.message;}
+  finally{button.disabled=false;button.textContent=kind==='chat'?'Ask assistant':kind==='draft'?'Create draft':'Summarize text';}
+}
+async function loadClientAIAnalytics(id){
+  const button=$(`ai-analytics-${id}`);const result=$(`ai-analytics-result-${id}`);
+  button.disabled=true;button.textContent='Loading…';result.textContent='';
+  try{const data=await api(`/api/client/ai/analytics/${id}`);
+    const lines=[`Case: ${data.case_number} — ${data.case_title}`,`Status: ${data.case_status}`];
+    if(data.schedule) lines.push(`Visible contact sessions: ${data.schedule.visible_sessions}`,`Upcoming contact sessions: ${data.schedule.upcoming_sessions}`);
+    else lines.push('Contact schedule access has not been enabled for your account.');
+    result.textContent=lines.join('\\n');
+  }catch(err){result.textContent=err.message;}
+  finally{button.disabled=false;button.textContent='Load case overview';}
+}
+
 async function uploadClientPdf(e,id){e.preventDefault();try{await api(`/api/client/cases/${id}/documents`,{method:'POST',body:new FormData(e.currentTarget)});notice('Your PDF has been submitted to White Oak Center for staff review.');e.currentTarget.reset();}catch(err){notice(err.message,'error');}}
 async function submitReferral(e,id){e.preventDefault();try{const text=new FormData(e.currentTarget).get('form_data');await api(`/api/client/cases/${id}/referrals`,{method:'POST',body:JSON.stringify({form_data:{client_submission:text}})});notice('Your information has been submitted.');e.currentTarget.reset();}catch(err){notice(err.message,'error');}}
 
