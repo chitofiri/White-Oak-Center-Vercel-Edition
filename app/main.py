@@ -20,6 +20,7 @@ from .schemas import (
 )
 from .security import verify_password, hash_password, create_access_token, current_user, require_roles
 from .storage import save_pdf, read_pdf
+from .ai_routes import router as ai_router
 
 def initialise_database() -> None:
     """Wait for PostgreSQL, then create any missing application tables.
@@ -82,6 +83,7 @@ app = FastAPI(
     docs_url="/docs" if settings.environment == "development" else None,
     lifespan=lifespan,
 )
+app.include_router(ai_router)
 app.mount("/web", StaticFiles(directory=str(__import__("pathlib").Path(__file__).resolve().parent.parent / "web")), name="web")
 
 STAFF_ROLES = (Role.administrator, Role.staff, Role.safeguarding_lead)
