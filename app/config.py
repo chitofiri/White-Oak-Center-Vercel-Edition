@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     s3_region: str = "auto"
     s3_access_key_id: str | None = None
     s3_secret_access_key: str | None = None
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    ollama_model: str = "llama3.2:3b"
+    ollama_timeout_seconds: int = 90
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
